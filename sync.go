@@ -139,6 +139,12 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 			if res.shouldUpdateTimes {
 				state.timesMap[dstPath] = statTimes{atime: atime, mtime: mtime}
 			}
+			if s.PreserveOwnership {
+				err = os.Chown(dstPath, int(srcSysStat.Uid), int(srcSysStat.Gid))
+				if err != nil {
+					return errors.Wrapf(err, "fail to chown %v", dstPath)
+				}
+			}
 			return nil
 		} else if err != nil {
 			return errors.Wrapf(err, "fail to stat %v", dstPath)
@@ -172,6 +178,12 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 		}
 		if res.hasContentChanged {
 			report.fileChanges[dstPath] = true
+		}
+		if s.PreserveOwnership {
+			err = os.Chown(dstPath, int(srcSysStat.Uid), int(srcSysStat.Gid))
+			if err != nil {
+				return errors.Wrapf(err, "fail to chown %v", dstPath)
+			}
 		}
 		return nil
 	})
@@ -319,6 +331,7 @@ func (s *FsSyncer) syncUnexistingFile(src, dst syncInfo, state syncState) (unexi
 	if err != nil {
 		return res, errors.Wrapf(err, "fail to copy content from %v to %v", src.path, dst.path)
 	}
+
 	return unexistingFileRes{shouldUpdateTimes: true}, nil
 }
 

@@ -9,11 +9,16 @@ import (
 
 func main() {
 	withCheckum := flag.Bool("checksum", false, "compare files with checksum")
+	preserveOwnership := flag.Bool("preserve-ownership", false, "preservice ownership of source")
+
 	flag.Parse()
 
 	options := []func(s *fssync.FsSyncer){}
 	if *withCheckum {
 		options = append(options, fssync.WithChecksum)
+	}
+	if *preserveOwnership {
+		options = append(options, fssync.PreserveOwnership)
 	}
 	syncer := fssync.New(options...)
 

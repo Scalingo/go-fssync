@@ -105,6 +105,9 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 	}
 	report := fsSyncReport{fileChanges: map[string]bool{}}
 
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

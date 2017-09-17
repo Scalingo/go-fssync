@@ -1,9 +1,13 @@
 package fssync
 
 import (
+	"bytes"
+	"crypto/sha1"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -11,13 +15,30 @@ import (
 	"github.com/pkg/errors"
 )
 
+type SyncReport interface {
+	HasChanged(file string) bool
+	ChangeCount() int
+}
+
 type Syncer interface {
-	Sync(src, dst string) error
+	Sync(src, dst string) (SyncReport, error)
 }
 
 type FsSyncer struct {
 	CheckChecksum     bool
 	PreserveOwnership bool
+}
+
+type fsSyncReport struct {
+	fileChanges map[string]bool
+}
+
+func (r fsSyncReport) HasChanged(file string) bool {
+	return r.fileChanges[file]
+}
+
+func (r fsSyncReport) ChangeCount() int {
+	return len(r.fileChanges)
 }
 
 func New(opts ...func(*FsSyncer)) *FsSyncer {
@@ -37,9 +58,25 @@ func PreserveOwnership(s *FsSyncer) {
 }
 
 type syncInfo struct {
+	base     string
 	path     string
 	fileInfo os.FileInfo
 	stat     *syscall.Stat_t
+	times    statTimes
+}
+
+func (s syncInfo) SHA1() ([]byte, error) {
+	hash := sha1.New()
+	fd, err := os.Open(s.path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to open file")
+	}
+	defer fd.Close()
+	_, err = io.Copy(hash, fd)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to read file content")
+	}
+	return hash.Sum(nil), nil
 }
 
 type syncState struct {
@@ -52,15 +89,21 @@ type statTimes struct {
 	mtime time.Time
 }
 
+type existingFileRes struct {
+	shouldUpdateTimes bool
+	hasContentChanged bool
+}
+
 type unexistingFileRes struct {
 	shouldUpdateTimes bool
 }
 
-func (s *FsSyncer) Sync(src, dst string) error {
+func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 	state := syncState{
 		timesMap: map[string]statTimes{},
 		inoMap:   map[uint64]string{},
 	}
+	report := fsSyncReport{fileChanges: map[string]bool{}}
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -68,20 +111,23 @@ func (s *FsSyncer) Sync(src, dst string) error {
 		}
 		dstPath := strings.Replace(path, src, dst, 1)
 
-		srcStat, ok := info.Sys().(*syscall.Stat_t)
-		atime := time.Unix(int64(srcStat.Atim.Sec), int64(srcStat.Atim.Nsec))
-		mtime := time.Unix(int64(srcStat.Mtim.Sec), int64(srcStat.Mtim.Nsec))
+		srcSysStat, ok := info.Sys().(*syscall.Stat_t)
 		if !ok {
-			return errors.Wrapf(err, "fail to get detaied stat info for %s", src)
+			return errors.Wrapf(err, "fail to get detailed stat info for %s", path)
 		}
+		atime := time.Unix(int64(srcSysStat.Atim.Sec), int64(srcSysStat.Atim.Nsec))
+		mtime := time.Unix(int64(srcSysStat.Mtim.Sec), int64(srcSysStat.Mtim.Nsec))
 
-		_, err = os.Lstat(dstPath)
+		dstStat, err := os.Lstat(dstPath)
 		if os.IsNotExist(err) {
+			report.fileChanges[dstPath] = true
 			res, err := s.syncUnexistingFile(syncInfo{
+				base:     src,
 				path:     path,
 				fileInfo: info,
-				stat:     srcStat,
+				stat:     srcSysStat,
 			}, syncInfo{
+				base: dst,
 				path: dstPath,
 			}, state)
 			if err != nil {
@@ -90,24 +136,106 @@ func (s *FsSyncer) Sync(src, dst string) error {
 			if res.shouldUpdateTimes {
 				state.timesMap[dstPath] = statTimes{atime: atime, mtime: mtime}
 			}
+			return nil
 		} else if err != nil {
 			return errors.Wrapf(err, "fail to stat %v", dstPath)
+		}
+
+		dstSysStat, ok := dstStat.Sys().(*syscall.Stat_t)
+		if !ok {
+			return errors.Wrapf(err, "fail to get detailed stat info for %s", dstPath)
+		}
+		dstatime := time.Unix(int64(dstSysStat.Atim.Sec), int64(dstSysStat.Atim.Nsec))
+		dstmtime := time.Unix(int64(dstSysStat.Mtim.Sec), int64(dstSysStat.Mtim.Nsec))
+
+		res, err := s.syncExistingFile(syncInfo{
+			base:     src,
+			path:     path,
+			fileInfo: info,
+			stat:     srcSysStat,
+			times:    statTimes{atime: atime, mtime: mtime},
+		}, syncInfo{
+			base:     dst,
+			path:     dstPath,
+			fileInfo: dstStat,
+			stat:     dstSysStat,
+			times:    statTimes{atime: dstatime, mtime: dstmtime},
+		}, state)
+		if err != nil {
+			return errors.Wrapf(err, "fail to sync existing file %v", path)
+		}
+		if res.shouldUpdateTimes {
+			state.timesMap[dstPath] = statTimes{atime: atime, mtime: mtime}
+		}
+		if res.hasContentChanged {
+			report.fileChanges[dstPath] = true
 		}
 		return nil
 	})
 
 	if err != nil {
-		return errors.Wrapf(err, "fail to walk %v", src)
+		return report, errors.Wrapf(err, "fail to walk %v", src)
 	}
 
 	for file, times := range state.timesMap {
 		err = os.Chtimes(file, times.atime, times.mtime)
 		if err != nil {
-			return errors.Wrapf(err, "fail to set atime and mtime of %v", file)
+			return report, errors.Wrapf(err, "fail to set atime and mtime of %v", file)
 		}
 	}
 
-	return nil
+	return report, nil
+}
+
+func (s *FsSyncer) syncExistingFile(src, dst syncInfo, state syncState) (existingFileRes, error) {
+	res := existingFileRes{}
+	if src.fileInfo.IsDir() && dst.fileInfo.IsDir() {
+		res.shouldUpdateTimes = true
+		return res, nil
+	} else if src.fileInfo.IsDir() && !dst.fileInfo.IsDir() ||
+		!src.fileInfo.IsDir() && dst.fileInfo.IsDir() {
+		err := os.RemoveAll(dst.path)
+		if err != nil {
+			return res, errors.Wrapf(err, "fail to remove destination invalid file %v", dst.path)
+		}
+	}
+
+	if s.CheckChecksum {
+		srcSHA1, err := src.SHA1()
+		if err != nil {
+			return res, errors.Wrapf(err, "fail to compute SHA1 of %v", src.path)
+		}
+		dstSHA1, err := dst.SHA1()
+		if err != nil {
+			return res, errors.Wrapf(err, "fail to compute SHA1 of %v", dst.path)
+		}
+		if bytes.Equal(srcSHA1, dstSHA1) {
+			res.shouldUpdateTimes = true
+			return res, nil
+		}
+	} else {
+		if src.fileInfo.Size() == dst.fileInfo.Size() && src.fileInfo.ModTime() == dst.fileInfo.ModTime() {
+			return res, nil
+		}
+	}
+
+	res.hasContentChanged = true
+	dir := filepath.Dir(dst.path)
+	base := filepath.Base(dst.path)
+	tmpDst := tmpFileName(dir, base)
+	newFileRes, err := s.syncUnexistingFile(src, syncInfo{base: dst.base, path: tmpDst}, state)
+	if err != nil {
+		return res, errors.Wrapf(err, "fail to sync src to temp file %v -> %v", src.path, tmpDst)
+	}
+	res.shouldUpdateTimes = newFileRes.shouldUpdateTimes
+
+	// Once the new file is ready, replace the old one
+	err = os.Rename(tmpDst, dst.path)
+	if err != nil {
+		return res, errors.Wrapf(err, "fail to mv tmp file on original file %v -> %v", tmpDst, dst.path)
+	}
+
+	return res, nil
 }
 
 func (s *FsSyncer) syncUnexistingFile(src, dst syncInfo, state syncState) (unexistingFileRes, error) {
@@ -135,6 +263,9 @@ func (s *FsSyncer) syncUnexistingFile(src, dst syncInfo, state syncState) (unexi
 		linkDst, err := os.Readlink(src.path)
 		if err != nil {
 			return res, errors.Wrapf(err, "fail to get link destination of src %v", src.path)
+		}
+		if strings.Contains(linkDst, src.base) {
+			linkDst = strings.Replace(linkDst, src.base, dst.base, 1)
 		}
 		err = os.Symlink(linkDst, dst.path)
 		if err != nil {
@@ -166,4 +297,11 @@ func (s *FsSyncer) copyFileContent(src, dst string, info os.FileInfo) (int64, er
 		return -1, errors.Wrapf(err, "fail to copy data")
 	}
 	return n, nil
+}
+
+func tmpFileName(dir, base string) string {
+	// From io/ioutil.TempFile
+	r := uint32(time.Now().UnixNano() + int64(os.Getpid()))
+	r = r*1664525 + 1013904223 // constants from Numerical Recipes
+	return filepath.Join(dir, fmt.Sprintf(".%s-%s", base, strconv.Itoa(int(1e9 + r%1e9))[1:]))
 }

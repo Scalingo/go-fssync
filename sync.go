@@ -237,6 +237,8 @@ func (s *FsSyncer) syncExistingFile(src, dst syncInfo, state syncState) (existin
 	if err != nil {
 		return res, errors.Wrapf(err, "fail to mv tmp file on original file %v -> %v", tmpDst, dst.path)
 	}
+	// temp file name has been set to state, restore it to real name
+	state.inoMap[src.stat.Ino] = dst.path
 
 	return res, nil
 }

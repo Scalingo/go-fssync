@@ -1,6 +1,7 @@
 package fssync
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -94,6 +95,19 @@ func TestFsSyncer_Sync(t *testing.T) {
 			FixtureSrc:      "src/file",
 			FixtureDst:      "dst/replace-file",
 			ExpectedChanges: []string{"a"},
+		}, {
+			Name:            "it should delete extraneous files",
+			FixtureSrc:      "src/file",
+			FixtureDst:      "dst/extraneous-files",
+			ExpectedChanges: []string{"b", "dir", "dir/c"},
+			AdditionalSpecs: func(t *testing.T, src, dst string) {
+				_, err := os.Stat(filepath.Join(dst, "b"))
+				assert.True(t, os.IsNotExist(err))
+				_, err = os.Stat(filepath.Join(dst, "dir"))
+				assert.True(t, os.IsNotExist(err))
+				_, err = os.Stat(filepath.Join(dst, "c"))
+				assert.True(t, os.IsNotExist(err))
+			},
 		},
 	}
 
@@ -127,7 +141,9 @@ func TestFsSyncer_Sync(t *testing.T) {
 				}
 
 				for _, path := range example.ExpectedChanges {
-					assert.True(t, report.HasChanged(filepath.Join(dst, path)))
+					t.Run(fmt.Sprintf("file %s has changed", path), func(t *testing.T) {
+						assert.True(t, report.HasChanged(filepath.Join(dst, path)))
+					})
 				}
 			}
 
@@ -135,28 +151,31 @@ func TestFsSyncer_Sync(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				dstPath := strings.Replace(path, src, dst, 1)
-				dstStat, err := os.Lstat(dstPath)
-				assert.NoError(t, err)
-				assert.Equal(t, info.IsDir(), dstStat.IsDir())
-				assert.Equal(t, info.Mode(), dstStat.Mode())
-				if info.Mode()&os.ModeSymlink == os.ModeSymlink {
-					srcLink, err := os.Readlink(path)
-					assert.NoError(t, err)
-					dstLink, err := os.Readlink(dstPath)
-					assert.NoError(t, err)
 
-					// If link is mentionning src path, replace it with dst
-					expectedLink := srcLink
-					if strings.Contains(expectedLink, src) {
-						expectedLink = strings.Replace(dstLink, src, dst, 1)
+				t.Run("with file "+path, func(t *testing.T) {
+					dstPath := strings.Replace(path, src, dst, 1)
+					dstStat, err := os.Lstat(dstPath)
+					assert.NoError(t, err)
+					assert.Equal(t, info.IsDir(), dstStat.IsDir())
+					assert.Equal(t, info.Mode(), dstStat.Mode())
+					if info.Mode()&os.ModeSymlink == os.ModeSymlink {
+						srcLink, err := os.Readlink(path)
+						assert.NoError(t, err)
+						dstLink, err := os.Readlink(dstPath)
+						assert.NoError(t, err)
+
+						// If link is mentionning src path, replace it with dst
+						expectedLink := srcLink
+						if strings.Contains(expectedLink, src) {
+							expectedLink = strings.Replace(dstLink, src, dst, 1)
+						}
+
+						assert.Equal(t, expectedLink, dstLink)
+					} else {
+						assert.Equal(t, info.Size(), dstStat.Size())
+						assert.Equal(t, info.ModTime(), dstStat.ModTime())
 					}
-
-					assert.Equal(t, expectedLink, dstLink)
-				} else {
-					assert.Equal(t, info.Size(), dstStat.Size())
-					assert.Equal(t, info.ModTime(), dstStat.ModTime())
-				}
+				})
 				return nil
 			})
 			assert.NoError(t, err)

@@ -180,6 +180,42 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 		return report, errors.Wrapf(err, "fail to walk %v", src)
 	}
 
+	dirsToRemove := []string{}
+	err = filepath.Walk(dst, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		srcPath := strings.Replace(path, dst, src, 1)
+		_, err = os.Lstat(srcPath)
+		if os.IsNotExist(err) {
+			report.fileChanges[path] = true
+			if info.IsDir() {
+				// Do not delete directory straight we want to tag all files
+				// recursively before deleting empty dirs
+				dirsToRemove = append(dirsToRemove, path)
+			} else {
+				err := os.Remove(path)
+				if err != nil {
+					return errors.Wrapf(err, "fail to delete %v", path)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return report, errors.Wrapf(err, "fail to walk %v", dst)
+	}
+
+	for i := len(dirsToRemove) - 1; i >= 0; i-- {
+		dir := dirsToRemove[i]
+		err := os.Remove(dir)
+		if err != nil {
+			return report, errors.Wrapf(err, "fail to delete %v", dir)
+		}
+	}
+
+	// Change times after removing entries as removing a file
+	// changes the mtime at the os level
 	for file, times := range state.timesMap {
 		err = os.Chtimes(file, times.atime, times.mtime)
 		if err != nil {

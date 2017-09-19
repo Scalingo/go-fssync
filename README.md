@@ -29,6 +29,10 @@ fssync.WithChecksum
 
 // Preserve Owner/Group (require root), will return an error otherwise
 fssync.PreserveOwnership
+
+// Ignore if files are being deleted during the sync (if a process is
+// creating/destroyging quickly files in the source, it might happen)
+fssync.IgnoreNotFound
 ```
 
 By default the copy is based on the size + modification date

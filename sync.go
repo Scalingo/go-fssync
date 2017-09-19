@@ -25,8 +25,15 @@ type Syncer interface {
 }
 
 type FsSyncer struct {
-	CheckChecksum     bool
+	// Check SHA1 checksum instead of modtime + size
+	CheckChecksum bool
+	// Chown files from source owner instead of copying with current owner root
+	// required to change the user ownership in most cases
 	PreserveOwnership bool
+	// If the synced directory is heavily used during the sync there might be a
+	// file which is walked in but which does not exist anymore when Lstat is
+	// used
+	IgnoreNotFound bool
 }
 
 type fsSyncReport struct {
@@ -55,6 +62,10 @@ func WithChecksum(s *FsSyncer) {
 
 func PreserveOwnership(s *FsSyncer) {
 	s.PreserveOwnership = true
+}
+
+func IgnoreNotfound(s *FsSyncer) {
+	s.IgnoreNotFound = true
 }
 
 type syncInfo struct {
@@ -110,6 +121,9 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) && s.IgnoreNotFound {
+				return nil
+			}
 			return err
 		}
 		dstPath := strings.Replace(path, src, dst, 1)
@@ -230,8 +244,7 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 	// changes the mtime at the os level
 	for file, times := range state.timesMap {
 		err = os.Chtimes(file, times.atime, times.mtime)
-		// Checking IsNotExist if file is deleted between copy and Chtimes
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !(os.IsNotExist(err) && s.IgnoreNotFound) {
 			return report, errors.Wrapf(err, "fail to set atime and mtime of %v", file)
 		}
 	}

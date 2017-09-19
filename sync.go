@@ -230,7 +230,8 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 	// changes the mtime at the os level
 	for file, times := range state.timesMap {
 		err = os.Chtimes(file, times.atime, times.mtime)
-		if err != nil {
+		// Checking IsNotExist if file is deleted between copy and Chtimes
+		if err != nil && !os.IsNotExist(err) {
 			return report, errors.Wrapf(err, "fail to set atime and mtime of %v", file)
 		}
 	}

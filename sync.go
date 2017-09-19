@@ -64,7 +64,7 @@ func PreserveOwnership(s *FsSyncer) {
 	s.PreserveOwnership = true
 }
 
-func IgnoreNotfound(s *FsSyncer) {
+func IgnoreNotFound(s *FsSyncer) {
 	s.IgnoreNotFound = true
 }
 

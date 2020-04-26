@@ -26,14 +26,14 @@ type Syncer interface {
 
 type FsSyncer struct {
 	// Check SHA1 checksum instead of modtime + size
-	CheckChecksum bool
+	checkChecksum bool
 	// Chown files from source owner instead of copying with current owner root
 	// required to change the user ownership in most cases
-	PreserveOwnership bool
+	preserveOwnership bool
 	// If the synced directory is heavily used during the sync there might be a
 	// file which is walked in but which does not exist anymore when Lstat is
 	// used
-	IgnoreNotFound bool
+	ignoreNotFound bool
 }
 
 type fsSyncReport struct {
@@ -57,15 +57,15 @@ func New(opts ...func(*FsSyncer)) *FsSyncer {
 }
 
 func WithChecksum(s *FsSyncer) {
-	s.CheckChecksum = true
+	s.checkChecksum = true
 }
 
 func PreserveOwnership(s *FsSyncer) {
-	s.PreserveOwnership = true
+	s.preserveOwnership = true
 }
 
 func IgnoreNotFound(s *FsSyncer) {
-	s.IgnoreNotFound = true
+	s.ignoreNotFound = true
 }
 
 type syncInfo struct {
@@ -121,7 +121,7 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			if os.IsNotExist(err) && s.IgnoreNotFound {
+			if os.IsNotExist(err) && s.ignoreNotFound {
 				return nil
 			}
 			return err
@@ -153,7 +153,7 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 			if res.shouldUpdateTimes {
 				state.timesMap[dstPath] = statTimes{atime: atime, mtime: mtime}
 			}
-			if s.PreserveOwnership {
+			if s.preserveOwnership {
 				err = os.Chown(dstPath, int(srcSysStat.Uid), int(srcSysStat.Gid))
 				if err != nil {
 					return errors.Wrapf(err, "fail to chown %v", dstPath)
@@ -193,7 +193,7 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 		if res.hasContentChanged {
 			report.fileChanges[dstPath] = true
 		}
-		if s.PreserveOwnership {
+		if s.preserveOwnership {
 			err = os.Chown(dstPath, int(srcSysStat.Uid), int(srcSysStat.Gid))
 			if err != nil {
 				return errors.Wrapf(err, "fail to chown %v", dstPath)
@@ -244,7 +244,7 @@ func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
 	// changes the mtime at the os level
 	for file, times := range state.timesMap {
 		err = os.Chtimes(file, times.atime, times.mtime)
-		if err != nil && !(os.IsNotExist(err) && s.IgnoreNotFound) {
+		if err != nil && !(os.IsNotExist(err) && s.ignoreNotFound) {
 			return report, errors.Wrapf(err, "fail to set atime and mtime of %v", file)
 		}
 	}
@@ -265,7 +265,7 @@ func (s *FsSyncer) syncExistingFile(src, dst syncInfo, state syncState) (existin
 		}
 	}
 
-	if s.CheckChecksum {
+	if s.checkChecksum {
 		srcSHA1, err := src.SHA1()
 		if err != nil {
 			return res, errors.Wrapf(err, "fail to compute SHA1 of %v", src.path)

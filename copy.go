@@ -10,12 +10,20 @@ import (
 // copyContent is highly inspired from io.Copy, but calls to fadvise have been
 // added to prevent caching the whole content of the files during the process,
 // impacting the whole OS disk cache
-func (s *FsSyncer) copyContent(src, dst *os.File) (written int64, err error) {
+func (s *FsSyncer) copyContent(src, dst *os.File) (int64, error) {
+	var (
+		written int64
+		err     error
+	)
 	buf := make([]byte, s.bufferSize)
 	for {
 		nr, er := src.Read(buf)
 		if nr > 0 {
 			if s.noCache {
+				// Fadvise is a system call giving instruction to the OS about how to behave
+				// with the flag FADC_DONTNEED, it tell the OS to drop the disk cache
+				// on a given file, on a give part of the file (initial offset + end offset)
+				// http://man7.org/linux/man-pages/man2/posix_fadvise.2.html
 				unix.Fadvise(int(src.Fd()), written, written+int64(nr), unix.FADV_DONTNEED)
 			}
 

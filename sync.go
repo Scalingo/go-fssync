@@ -79,7 +79,7 @@ func NoCache(s *FsSyncer) {
 	s.noCache = true
 }
 
-// WithBufferSize options lets you configure the size of the memory buffer used
+// WithBufferSize option: lets you configure the size of the memory buffer used
 // to perform the copy from one file to another
 // Default is 512kB
 func WithBufferSize(n int64) func(*FsSyncer) {

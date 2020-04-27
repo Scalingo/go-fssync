@@ -20,9 +20,9 @@ func (s *FsSyncer) copyContent(src, dst *os.File) (int64, error) {
 		nr, er := src.Read(buf)
 		if nr > 0 {
 			if s.noCache {
-				// Fadvise is a system call giving instruction to the OS about how to behave
-				// with the flag FADC_DONTNEED, it tell the OS to drop the disk cache
-				// on a given file, on a give part of the file (initial offset + end offset)
+				// Fadvise is a system call giving instruction to the OS about how to behave.
+				// With the flag FADC_DONTNEED, it tells the OS to drop the disk cache
+				// on a given file, on a given part of the file (initial offset + end offset)
 				// http://man7.org/linux/man-pages/man2/posix_fadvise.2.html
 				unix.Fadvise(int(src.Fd()), written, written+int64(nr), unix.FADV_DONTNEED)
 			}

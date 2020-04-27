@@ -24,15 +24,39 @@ type interface FsSyncer {
 fssync.New(opts... func(*FsSyncer))
 
 // Options
-// Check with checksum instead of size/mtime
+// WithChecksum option: Check SHA1 checksum instead of modtime + size
 fssync.WithChecksum
 
-// Preserve Owner/Group (require root), will return an error otherwise
+// PreserveOwnership option: chown files from source owner instead of copying
+// with current owner root required to change the user ownership in most cases
 fssync.PreserveOwnership
 
-// Ignore if files are being deleted during the sync (if a process is
-// creating/destroyging quickly files in the source, it might happen)
+// IgnoreNotFound option: if the synced directory is heavily used during the
+// sync there might be a file which is walked in but which does not exist
+// anymore when Lstat is used
 fssync.IgnoreNotFound
+
+// NoCache option: Use the system call fadvise to discard kernel cache after
+// reading/writing Inspired from
+// https://github.com/coreutils/coreutils/blob/master/src/dd.c
+fssync.NoCache
+
+// WithBufferSize option: lets you configure the size of the memory buffer used
+// to perform the copy from one file to another
+// Default is 512kB
+WithBufferSize(n int64)
 ```
 
 By default the copy is based on the size + modification date
+
+
+## Command line tool
+
+You can try out the synchronisation mecanisms with the command line tool
+provided with the library:
+
+```
+go get github.com/Scalingo/go-fssync/cmd/fssync
+
+fssync [-no-cache=false] [-buffer-size=0] [-preserve-ownership=false] [-checksum=false] ./src ./dst
+```

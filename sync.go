@@ -25,15 +25,11 @@ type Syncer interface {
 }
 
 type FsSyncer struct {
-	// Check SHA1 checksum instead of modtime + size
-	checkChecksum bool
-	// Chown files from source owner instead of copying with current owner root
-	// required to change the user ownership in most cases
+	checkChecksum     bool
 	preserveOwnership bool
-	// If the synced directory is heavily used during the sync there might be a
-	// file which is walked in but which does not exist anymore when Lstat is
-	// used
-	ignoreNotFound bool
+	ignoreNotFound    bool
+	noCache           bool
+	bufferSize        int64
 }
 
 type fsSyncReport struct {
@@ -49,23 +45,47 @@ func (r fsSyncReport) ChangeCount() int {
 }
 
 func New(opts ...func(*FsSyncer)) *FsSyncer {
-	s := &FsSyncer{}
+	s := &FsSyncer{
+		bufferSize: 512 * 1024,
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
 }
 
+// WithChecksum option: Check SHA1 checksum instead of modtime + size
 func WithChecksum(s *FsSyncer) {
 	s.checkChecksum = true
 }
 
+// PreserveOwnership option: chown files from source owner instead of copying
+// with current owner root required to change the user ownership in most cases
 func PreserveOwnership(s *FsSyncer) {
 	s.preserveOwnership = true
 }
 
+// IgnoreNotFound option: if the synced directory is heavily used during the
+// sync there might be a file which is walked in but which does not exist
+// anymore when Lstat is used
 func IgnoreNotFound(s *FsSyncer) {
 	s.ignoreNotFound = true
+}
+
+// NoCache option: Use the system call fadvise to discard kernel cache after
+// reading/writing Inspired from
+// https://github.com/coreutils/coreutils/blob/master/src/dd.c
+func NoCache(s *FsSyncer) {
+	s.noCache = true
+}
+
+// WithBufferSize option: lets you configure the size of the memory buffer used
+// to perform the copy from one file to another
+// Default is 512kB
+func WithBufferSize(n int64) func(*FsSyncer) {
+	return func(s *FsSyncer) {
+		s.bufferSize = n
+	}
 }
 
 type syncInfo struct {
@@ -360,7 +380,7 @@ func (s *FsSyncer) copyFileContent(src, dst string, info os.FileInfo) (int64, er
 		return -1, errors.Wrapf(err, "fail to open dest %v", dst)
 	}
 	defer fd.Close()
-	n, err := io.Copy(fd, sfd)
+	n, err := s.copyContent(sfd, fd)
 	if err != nil {
 		return -1, errors.Wrapf(err, "fail to copy data")
 	}

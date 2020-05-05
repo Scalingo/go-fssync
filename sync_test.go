@@ -124,14 +124,14 @@ func TestFsSyncer_Sync(t *testing.T) {
 			if example.FixtureDst != "" {
 				fixtureDst := filepath.Join("test-fixtures", example.FixtureDst)
 				fixtureSyncer := New()
-				_, err := fixtureSyncer.Sync(fixtureDst, dst)
+				_, err := fixtureSyncer.Sync(dst, fixtureDst)
 				if err != nil {
 					assert.NoError(t, err)
 				}
 			}
 
 			src := filepath.Join("test-fixtures", example.FixtureSrc)
-			report, err := syncer.Sync(src, dst)
+			report, err := syncer.Sync(dst, src)
 			assert.NoError(t, err)
 
 			if example.ExpectedChanges != nil {

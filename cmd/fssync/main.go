@@ -36,7 +36,7 @@ func main() {
 	}
 	src := args[0]
 	dst := args[1]
-	_, err := syncer.Sync(src, dst)
+	_, err := syncer.Sync(dst, src)
 	if err != nil {
 		log.Fatalln(err)
 	}

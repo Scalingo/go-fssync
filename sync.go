@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	iopkg "github.com/Scalingo/go-utils/io"
 	"github.com/pkg/errors"
 )
 
@@ -21,7 +22,13 @@ type SyncReport interface {
 }
 
 type Syncer interface {
-	Sync(src, dst string) (SyncReport, error)
+	Sync(dst, src string) (SyncReport, error)
+}
+
+// Copier is the interface used to copy content from one file to another
+// By default it's using iopkg.Copier
+type Copier interface {
+	Copy(dst io.Writer, src io.Reader) (int64, error)
 }
 
 type FsSyncer struct {
@@ -30,6 +37,7 @@ type FsSyncer struct {
 	ignoreNotFound    bool
 	noCache           bool
 	bufferSize        int64
+	copier            Copier
 }
 
 type fsSyncReport struct {
@@ -51,6 +59,16 @@ func New(opts ...func(*FsSyncer)) *FsSyncer {
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	copierOpts := []iopkg.CopierOpt{}
+	if s.bufferSize != 0 {
+		copierOpts = append(copierOpts, iopkg.WithBufferSize(s.bufferSize))
+	}
+	if s.noCache {
+		copierOpts = append(copierOpts, iopkg.WithNoDiskCache)
+	}
+	s.copier = iopkg.NewCopier(copierOpts...)
+
 	return s
 }
 
@@ -129,7 +147,7 @@ type unexistingFileRes struct {
 	shouldUpdateTimes bool
 }
 
-func (s *FsSyncer) Sync(src, dst string) (SyncReport, error) {
+func (s *FsSyncer) Sync(dst, src string) (SyncReport, error) {
 	state := syncState{
 		timesMap: map[string]statTimes{},
 		inoMap:   map[uint64]string{},
@@ -380,7 +398,7 @@ func (s *FsSyncer) copyFileContent(src, dst string, info os.FileInfo) (int64, er
 		return -1, errors.Wrapf(err, "fail to open dest %v", dst)
 	}
 	defer fd.Close()
-	n, err := s.copyContent(sfd, fd)
+	n, err := s.copier.Copy(fd, sfd)
 	if err != nil {
 		return -1, errors.Wrapf(err, "fail to copy data")
 	}

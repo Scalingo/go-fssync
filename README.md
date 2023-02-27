@@ -1,7 +1,6 @@
-FS Sync
-=======
+# FS Sync
 
-Tool which aims at syncing copying one file tree to another in a clever way. A bit like
+`go-fssync` is a Go library which aims at syncing / copying one file tree to another in a clever way. A bit like the `rsync` tool:
 
 ```sh
 rsync --archive --update --delete --numeric-ids --hard-links ./source ./destination
@@ -47,15 +46,13 @@ fssync.NoCache
 WithBufferSize(n int64)
 ```
 
-By default the copy is based on the size + modification date
+By default the copy is based on the size and modification date.
 
+## Command Line Tool
 
-## Command line tool
+You can try out the synchronization mechanisms with the command line tool provided with the library:
 
-You can try out the synchronisation mecanisms with the command line tool
-provided with the library:
-
-```
+```sh
 go get github.com/Scalingo/go-fssync/cmd/fssync
 
 fssync [-no-cache=false] [-buffer-size=0] [-preserve-ownership=false] [-checksum=false] ./src ./dst

@@ -171,8 +171,8 @@ func (s *FsSyncer) Sync(dst, src string) (SyncReport, error) {
 		if !ok {
 			return errors.Wrapf(err, "fail to get detailed stat info for %s", path)
 		}
-		atime := time.Unix(int64(srcSysStat.Atim.Sec), int64(srcSysStat.Atim.Nsec))
-		mtime := time.Unix(int64(srcSysStat.Mtim.Sec), int64(srcSysStat.Mtim.Nsec))
+		atime := time.Unix(srcSysStat.Atim.Sec, srcSysStat.Atim.Nsec)
+		mtime := time.Unix(srcSysStat.Mtim.Sec, srcSysStat.Mtim.Nsec)
 
 		dstStat, err := os.Lstat(dstPath)
 		if os.IsNotExist(err) {
@@ -207,8 +207,8 @@ func (s *FsSyncer) Sync(dst, src string) (SyncReport, error) {
 		if !ok {
 			return errors.Wrapf(err, "fail to get detailed stat info for %s", dstPath)
 		}
-		dstatime := time.Unix(int64(dstSysStat.Atim.Sec), int64(dstSysStat.Atim.Nsec))
-		dstmtime := time.Unix(int64(dstSysStat.Mtim.Sec), int64(dstSysStat.Mtim.Nsec))
+		dstatime := time.Unix(dstSysStat.Atim.Sec, dstSysStat.Atim.Nsec)
+		dstmtime := time.Unix(dstSysStat.Mtim.Sec, dstSysStat.Mtim.Nsec)
 
 		res, err := s.syncExistingFile(syncInfo{
 			base:     src,

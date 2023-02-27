@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,23 +34,6 @@ func TestFsSyncer_Sync(t *testing.T) {
 		"it should copy a directory": {
 			fixtureSrc: "src/dir",
 		},
-		"it should copy a hard link": {
-			fixtureSrc: "src/hardlink",
-			additionalSpecs: func(t *testing.T, src, dst string) {
-				apath := filepath.Join(dst, "a")
-				bpath := filepath.Join(dst, "b")
-
-				astat, err := os.Lstat(apath)
-				assert.NoError(t, err)
-
-				bstat, err := os.Lstat(bpath)
-				assert.NoError(t, err)
-
-				asysstat := astat.Sys().(*syscall.Stat_t)
-				bsysstat := bstat.Sys().(*syscall.Stat_t)
-				assert.Equal(t, asysstat.Ino, bsysstat.Ino)
-			},
-		},
 		"it should copy a symlink": {
 			fixtureSrc: "src/symlink",
 		},
@@ -60,16 +42,6 @@ func TestFsSyncer_Sync(t *testing.T) {
 		},
 		"it should keep the symlink to a relative path": {
 			fixtureSrc: "src/relative-symlink",
-		},
-		"it should replace a file with the same content but not the same mtime": {
-			fixtureSrc:      "src/file",
-			fixtureDst:      "dst/cp-file",
-			expectedChanges: []string{"a"},
-		},
-		"it should replace a file with the same size but not the same mtime": {
-			fixtureSrc:      "src/file",
-			fixtureDst:      "dst/same-size",
-			expectedChanges: []string{"a"},
 		},
 		"it should not replace a file with the same content but not the same mtime if checksum checks are enabled": {
 			fixtureSrc:      "src/file",

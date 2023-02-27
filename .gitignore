@@ -1,2 +1,16 @@
-cmd/fssync/fssync
+/cmd/fssync/fssync
 /_dev/go-cache
+
+# IDE
+.idea/
+
+# MacOS files
+.DS_Store
+.foreman
+
+# Ignore tests binaries
+*.test
+# But take CI env file
+!.env.test
+# environment variables with secrets
+.env*.local

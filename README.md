@@ -53,7 +53,5 @@ By default the copy is based on the size and modification date.
 You can try out the synchronization mechanisms with the command line tool provided with the library:
 
 ```sh
-go get github.com/Scalingo/go-fssync/cmd/fssync
-
-fssync [-no-cache=false] [-buffer-size=0] [-preserve-ownership=false] [-checksum=false] ./src ./dst
+go run cmd/fssync/main.go [-no-cache=false] [-buffer-size=0] [-preserve-ownership=false] [-checksum=false] ./src ./dst
 ```

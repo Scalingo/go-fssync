@@ -1,0 +1,12 @@
+version: '3'
+services:
+  test:
+    image: golang:1.17
+    volumes:
+      - ./:/go/src/github.com/Scalingo/go-fssync
+      - ./_dev/go-cache:/root/.cache
+    working_dir: /go/src/github.com/Scalingo/go-fssync
+    env_file:
+      - .env.test
+    stop_signal: SIGKILL
+    command: "tail -F /dev/null"

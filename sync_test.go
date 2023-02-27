@@ -164,7 +164,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 						dstLink, err := os.Readlink(dstPath)
 						assert.NoError(t, err)
 
-						// If link is mentionning src path, replace it with dst
+						// If link is mentioning src path, replace it with dst
 						expectedLink := srcLink
 						if strings.Contains(expectedLink, src) {
 							expectedLink = strings.Replace(dstLink, src, dst, 1)

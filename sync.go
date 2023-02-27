@@ -12,8 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	iopkg "github.com/Scalingo/go-utils/io"
 	"github.com/pkg/errors"
+
+	iopkg "github.com/Scalingo/go-utils/io"
 )
 
 type SyncReport interface {

@@ -8,3 +8,7 @@ updates:
       interval: "monthly"
     reviewers:
       - "EtienneM"
+    groups:
+      dependencies:
+        patterns:
+          - "*"

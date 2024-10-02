@@ -1,6 +1,6 @@
 module github.com/Scalingo/go-fssync
 
-go 1.20
+go 1.22
 
 require (
 	github.com/Scalingo/go-utils/io v1.1.1

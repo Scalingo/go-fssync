@@ -1,4 +1,4 @@
-# FS Sync
+# FS Sync Library v1.0.1
 
 `go-fssync` is a Go library which aims at syncing / copying one file tree to another in a clever way. A bit like the `rsync` tool:
 
@@ -55,3 +55,33 @@ You can try out the synchronization mechanisms with the command line tool provid
 ```sh
 go run cmd/fssync/main.go [-no-cache=false] [-buffer-size=0] [-preserve-ownership=false] [-checksum=false] ./src ./dst
 ```
+
+## Release a New Version
+
+Bump new version number in:
+
+- `CHANGELOG.md`
+- `README.md`
+
+Commit, tag and create a new release:
+
+```sh
+version="1.0.1"
+
+git switch --create release/${version}
+git add CHANGELOG.md README.md
+git commit -m "Bump v${version}"
+git push --set-upstream origin release/${version}
+gh pr create --reviewer=EtienneM --title "$(git log -1 --pretty=%B)"
+```
+
+Once the pull request merged, you can tag the new release.
+
+```sh
+git tag v${version}
+git push origin master v${version}
+gh release create v${version}
+```
+
+The title of the release should be the version number and the text of the
+release is the same as the changelog.

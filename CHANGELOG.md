@@ -2,7 +2,10 @@
 
 ## To Be Released
 
+## v1.0.2 2024-10-02
+
 * build: update Go from 1.20 to 1.22
+* build: various dependencies updates
 
 ## v1.0.1 2020-11-18
 

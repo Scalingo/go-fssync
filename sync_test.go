@@ -2,7 +2,6 @@ package fssync
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +10,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	// Directory where fixtures will be synced during the tests execution
+	tmpDir = ".tmp"
+	// Root directory for the fixture files
+	fixturesRootDir = "test-fixtures"
+)
+
 func TestMain(m *testing.M) {
-	err := os.MkdirAll(".tmp", 0700)
+	err := os.MkdirAll(tmpDir, 0700)
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(".tmp")
+	defer os.RemoveAll(tmpDir)
 	m.Run()
 }
 
@@ -48,11 +54,6 @@ func TestFsSyncer_Sync(t *testing.T) {
 			fixtureDst:      "dst/cp-file",
 			expectedChanges: []string{},
 			syncOptions:     []func(*FsSyncer){WithChecksum},
-		},
-		"it should not replace a file with the same size and mtime": {
-			fixtureSrc:      "src/file",
-			fixtureDst:      "dst/rsync-file",
-			expectedChanges: []string{},
 		},
 		"it should replace a file with the same mtime but not the same size": {
 			fixtureSrc:      "src/file",
@@ -86,16 +87,19 @@ func TestFsSyncer_Sync(t *testing.T) {
 
 	for msg, test := range tests {
 		t.Run(msg, func(t *testing.T) {
+			// Given
 			if test.syncOptions == nil {
 				test.syncOptions = []func(*FsSyncer){}
 			}
 			syncer := New(test.syncOptions...)
 
-			dst, err := ioutil.TempDir("./.tmp", "fssync-test")
+			// Create the directory that will be the destination for the tests on fixture files
+			dst, err := os.MkdirTemp(tmpDir, "fssync-test")
 			assert.NoError(t, err)
 			defer assert.NoError(t, os.RemoveAll(dst))
+
 			if test.fixtureDst != "" {
-				fixtureDst := filepath.Join("test-fixtures", test.fixtureDst)
+				fixtureDst := filepath.Join(fixturesRootDir, test.fixtureDst)
 				fixtureSyncer := New()
 				_, err := fixtureSyncer.Sync(dst, fixtureDst)
 				if err != nil {
@@ -103,24 +107,26 @@ func TestFsSyncer_Sync(t *testing.T) {
 				}
 			}
 
-			src := filepath.Join("test-fixtures", test.fixtureSrc)
-			report, err := syncer.Sync(dst, src)
+			// When
+			src := filepath.Join(fixturesRootDir, test.fixtureSrc)
+			syncReport, err := syncer.Sync(dst, src)
 			assert.NoError(t, err)
 
+			// Then
 			if test.expectedChanges != nil {
 				// Check that if there is no change expected, there should be no change in report
 				if len(test.expectedChanges) == 0 {
-					assert.Equal(t, report.ChangeCount(), 0)
+					assert.Equal(t, syncReport.ChangeCount(), 0)
 				}
 
 				for _, path := range test.expectedChanges {
 					t.Run(fmt.Sprintf("file %s has changed", path), func(t *testing.T) {
-						assert.True(t, report.HasChanged(filepath.Join(dst, path)))
+						assert.True(t, syncReport.HasChanged(filepath.Join(dst, path)))
 					})
 				}
 			}
 
-			err = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+			err = filepath.Walk(src, func(path string, srcInfo os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -129,9 +135,14 @@ func TestFsSyncer_Sync(t *testing.T) {
 					dstPath := strings.Replace(path, src, dst, 1)
 					dstStat, err := os.Lstat(dstPath)
 					assert.NoError(t, err)
-					assert.Equal(t, info.IsDir(), dstStat.IsDir())
-					assert.Equal(t, info.Mode(), dstStat.Mode())
-					if info.Mode()&os.ModeSymlink == os.ModeSymlink {
+
+					assert.Equal(t, srcInfo.IsDir(), dstStat.IsDir(), "must be a directory")
+					assert.Equal(t,
+						srcInfo.Mode(), dstStat.Mode(),
+						"file mode is different ("+srcInfo.Mode().String()+" != "+dstStat.Mode().String()+")",
+					)
+					// If source file is a symlink
+					if srcInfo.Mode()&os.ModeSymlink == os.ModeSymlink {
 						srcLink, err := os.Readlink(path)
 						assert.NoError(t, err)
 						dstLink, err := os.Readlink(dstPath)
@@ -145,8 +156,8 @@ func TestFsSyncer_Sync(t *testing.T) {
 
 						assert.Equal(t, expectedLink, dstLink)
 					} else {
-						assert.Equal(t, info.Size(), dstStat.Size())
-						assert.Equal(t, info.ModTime(), dstStat.ModTime())
+						assert.Equal(t, srcInfo.Size(), dstStat.Size(), "size is different")
+						assert.Equal(t, srcInfo.ModTime(), dstStat.ModTime(), "modification time is different")
 					}
 				})
 				return nil

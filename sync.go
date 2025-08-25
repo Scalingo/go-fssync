@@ -318,7 +318,7 @@ func (s *FsSyncer) syncExistingFile(src, dst syncInfo, state syncState) (existin
 			return res, nil
 		}
 	} else {
-		if src.fileInfo.Size() == dst.fileInfo.Size() && src.fileInfo.ModTime() == dst.fileInfo.ModTime() {
+		if src.fileInfo.Size() == dst.fileInfo.Size() && src.fileInfo.ModTime().Equal(dst.fileInfo.ModTime()) {
 			return res, nil
 		}
 	}

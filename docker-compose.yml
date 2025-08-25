@@ -1,4 +1,3 @@
-version: '3'
 services:
   test:
     image: golang:1.24

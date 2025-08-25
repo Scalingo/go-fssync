@@ -2,7 +2,6 @@ package fssync
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,8 +90,9 @@ func TestFsSyncer_Sync(t *testing.T) {
 			}
 			syncer := New(test.syncOptions...)
 
-			dst, err := ioutil.TempDir("./.tmp", "fssync-test")
+			dst, err := os.MkdirTemp("./.tmp", "fssync-test")
 			assert.NoError(t, err)
+
 			defer assert.NoError(t, os.RemoveAll(dst))
 			if test.fixtureDst != "" {
 				fixtureDst := filepath.Join("test-fixtures", test.fixtureDst)

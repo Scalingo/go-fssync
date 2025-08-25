@@ -10,12 +10,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	// Directory where fixtures will be synced during the tests execution
+	tmpDir = ".tmp"
+)
+
 func TestMain(m *testing.M) {
-	err := os.MkdirAll(".tmp", 0700)
+	err := os.MkdirAll(tmpDir, 0700)
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(".tmp")
+	defer os.RemoveAll(tmpDir)
 	m.Run()
 }
 
@@ -90,9 +95,8 @@ func TestFsSyncer_Sync(t *testing.T) {
 			}
 			syncer := New(test.syncOptions...)
 
-			dst, err := os.MkdirTemp("./.tmp", "fssync-test")
+			dst, err := os.MkdirTemp("./"+tmpDir, "fssync-test")
 			assert.NoError(t, err)
-
 			defer assert.NoError(t, os.RemoveAll(dst))
 			if test.fixtureDst != "" {
 				fixtureDst := filepath.Join("test-fixtures", test.fixtureDst)

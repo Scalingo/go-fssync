@@ -13,6 +13,8 @@ import (
 const (
 	// Directory where fixtures will be synced during the tests execution
 	tmpDir = ".tmp"
+	// Root directory for the fixture files
+	fixturesRootDir = "test-fixtures"
 )
 
 func TestMain(m *testing.M) {
@@ -95,11 +97,13 @@ func TestFsSyncer_Sync(t *testing.T) {
 			}
 			syncer := New(test.syncOptions...)
 
+			// Create the directory that will be the destination for the tests on fixture files
 			dst, err := os.MkdirTemp("./"+tmpDir, "fssync-test")
 			assert.NoError(t, err)
 			defer assert.NoError(t, os.RemoveAll(dst))
+
 			if test.fixtureDst != "" {
-				fixtureDst := filepath.Join("test-fixtures", test.fixtureDst)
+				fixtureDst := filepath.Join(fixturesRootDir, test.fixtureDst)
 				fixtureSyncer := New()
 				_, err := fixtureSyncer.Sync(dst, fixtureDst)
 				if err != nil {
@@ -107,7 +111,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 				}
 			}
 
-			src := filepath.Join("test-fixtures", test.fixtureSrc)
+			src := filepath.Join(fixturesRootDir, test.fixtureSrc)
 			report, err := syncer.Sync(dst, src)
 			assert.NoError(t, err)
 

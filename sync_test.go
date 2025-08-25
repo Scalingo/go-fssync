@@ -92,6 +92,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 
 	for msg, test := range tests {
 		t.Run(msg, func(t *testing.T) {
+			// Given
 			if test.syncOptions == nil {
 				test.syncOptions = []func(*FsSyncer){}
 			}
@@ -111,19 +112,21 @@ func TestFsSyncer_Sync(t *testing.T) {
 				}
 			}
 
+			// When
 			src := filepath.Join(fixturesRootDir, test.fixtureSrc)
-			report, err := syncer.Sync(dst, src)
+			syncReport, err := syncer.Sync(dst, src)
 			assert.NoError(t, err)
 
+			// Then
 			if test.expectedChanges != nil {
 				// Check that if there is no change expected, there should be no change in report
 				if len(test.expectedChanges) == 0 {
-					assert.Equal(t, report.ChangeCount(), 0)
+					assert.Equal(t, syncReport.ChangeCount(), 0)
 				}
 
 				for _, path := range test.expectedChanges {
 					t.Run(fmt.Sprintf("file %s has changed", path), func(t *testing.T) {
-						assert.True(t, report.HasChanged(filepath.Join(dst, path)))
+						assert.True(t, syncReport.HasChanged(filepath.Join(dst, path)))
 					})
 				}
 			}

@@ -131,7 +131,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 				}
 			}
 
-			err = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+			err = filepath.Walk(src, func(path string, srcInfo os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -140,9 +140,14 @@ func TestFsSyncer_Sync(t *testing.T) {
 					dstPath := strings.Replace(path, src, dst, 1)
 					dstStat, err := os.Lstat(dstPath)
 					assert.NoError(t, err)
-					assert.Equal(t, info.IsDir(), dstStat.IsDir())
-					assert.Equal(t, info.Mode(), dstStat.Mode())
-					if info.Mode()&os.ModeSymlink == os.ModeSymlink {
+
+					assert.Equal(t, srcInfo.IsDir(), dstStat.IsDir(), "must be a directory")
+					assert.Equal(t,
+						srcInfo.Mode(), dstStat.Mode(),
+						"file mode is different ("+srcInfo.Mode().String()+" != "+dstStat.Mode().String()+")",
+					)
+					// If source file is a symlink
+					if srcInfo.Mode()&os.ModeSymlink == os.ModeSymlink {
 						srcLink, err := os.Readlink(path)
 						assert.NoError(t, err)
 						dstLink, err := os.Readlink(dstPath)
@@ -156,8 +161,8 @@ func TestFsSyncer_Sync(t *testing.T) {
 
 						assert.Equal(t, expectedLink, dstLink)
 					} else {
-						assert.Equal(t, info.Size(), dstStat.Size())
-						assert.Equal(t, info.ModTime(), dstStat.ModTime())
+						assert.Equal(t, srcInfo.Size(), dstStat.Size(), "size is different")
+						assert.Equal(t, srcInfo.ModTime(), dstStat.ModTime(), "modification time is different")
 					}
 				})
 				return nil

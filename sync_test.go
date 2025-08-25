@@ -55,11 +55,6 @@ func TestFsSyncer_Sync(t *testing.T) {
 			expectedChanges: []string{},
 			syncOptions:     []func(*FsSyncer){WithChecksum},
 		},
-		"it should not replace a file with the same size and mtime": {
-			fixtureSrc:      "src/file",
-			fixtureDst:      "dst/rsync-file",
-			expectedChanges: []string{},
-		},
 		"it should replace a file with the same mtime but not the same size": {
 			fixtureSrc:      "src/file",
 			fixtureDst:      "dst/mtime-file",

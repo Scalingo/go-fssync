@@ -94,7 +94,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 			syncer := New(test.syncOptions...)
 
 			// Create the directory that will be the destination for the tests on fixture files
-			dst, err := os.MkdirTemp("./"+tmpDir, "fssync-test")
+			dst, err := os.MkdirTemp(tmpDir, "fssync-test")
 			assert.NoError(t, err)
 			defer assert.NoError(t, os.RemoveAll(dst))
 

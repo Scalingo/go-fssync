@@ -7,8 +7,10 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -29,6 +31,7 @@ func TestMain(m *testing.M) {
 
 func TestFsSyncer_Sync(t *testing.T) {
 	tests := map[string]struct {
+		fixturesSetup   func(t *testing.T) (src string, dst string, cleanup func())
 		fixtureSrc      string
 		fixtureDst      string
 		expectedChanges []string
@@ -42,16 +45,32 @@ func TestFsSyncer_Sync(t *testing.T) {
 			fixtureSrc: "src/dir",
 		},
 		"it should copy a hard link": {
-			fixtureSrc: "src/hardlink",
+			fixturesSetup: func(t *testing.T) (string, string, func()) {
+				src, err := os.MkdirTemp(os.TempDir(), "fssync-test-fixtures-mtime-src-")
+				require.NoError(t, err)
+				dst, err := os.MkdirTemp(os.TempDir(), "fssync-test-fixtures-mtime-dst-")
+				require.NoError(t, err)
+
+				a := filepath.Join(src, "a")
+				err = os.WriteFile(a, []byte("hello world"), 0600)
+				require.NoError(t, err)
+				err = os.Link(a, filepath.Join(src, "b"))
+				require.NoError(t, err)
+
+				return src, dst, func() {
+					require.NoError(t, os.RemoveAll(src))
+					require.NoError(t, os.RemoveAll(dst))
+				}
+			},
 			additionalSpecs: func(t *testing.T, src, dst string) {
 				apath := filepath.Join(dst, "a")
 				bpath := filepath.Join(dst, "b")
 
 				astat, err := os.Lstat(apath)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				bstat, err := os.Lstat(bpath)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				asysstat := astat.Sys().(*syscall.Stat_t)
 				bsysstat := bstat.Sys().(*syscall.Stat_t)
@@ -82,6 +101,33 @@ func TestFsSyncer_Sync(t *testing.T) {
 			fixtureDst:      "dst/cp-file",
 			expectedChanges: []string{},
 			syncOptions:     []func(*FsSyncer){WithChecksum},
+		},
+		"it should not replace a file with the same size and mtime": {
+			fixturesSetup: func(t *testing.T) (string, string, func()) {
+				src, err := os.MkdirTemp(os.TempDir(), "fssync-test-fixtures-mtime-src-")
+				require.NoError(t, err)
+				dst, err := os.MkdirTemp(os.TempDir(), "fssync-test-fixtures-mtime-dst-")
+				require.NoError(t, err)
+
+				aSrc := filepath.Join(src, "a")
+				aDst := filepath.Join(dst, "a")
+				err = os.WriteFile(aSrc, []byte("hello world"), 0600)
+				require.NoError(t, err)
+				err = os.WriteFile(aDst, []byte("hello world"), 0600)
+				require.NoError(t, err)
+
+				// Sync mtimes to ensure they are the same
+				now := time.Now()
+				err = os.Chtimes(src, now, now)
+				require.NoError(t, err)
+				err = os.Chtimes(dst, now, now)
+				require.NoError(t, err)
+				return src, dst, func() {
+					require.NoError(t, os.RemoveAll(src))
+					require.NoError(t, os.RemoveAll(dst))
+				}
+			},
+			expectedChanges: []string{},
 		},
 		"it should replace a file with the same mtime but not the same size": {
 			fixtureSrc:      "src/file",
@@ -121,30 +167,35 @@ func TestFsSyncer_Sync(t *testing.T) {
 			}
 			syncer := New(test.syncOptions...)
 
+			src := filepath.Join(fixturesRootDir, test.fixtureSrc)
 			// Create the directory that will be the destination for the tests on fixture files
 			dst, err := os.MkdirTemp(tmpDir, "fssync-test")
 			assert.NoError(t, err)
 			defer assert.NoError(t, os.RemoveAll(dst))
-
 			if test.fixtureDst != "" {
 				fixtureDst := filepath.Join(fixturesRootDir, test.fixtureDst)
 				fixtureSyncer := New()
 				_, err := fixtureSyncer.Sync(dst, fixtureDst)
 				if err != nil {
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 			}
 
+			if test.fixturesSetup != nil {
+				var cleanup func()
+				src, dst, cleanup = test.fixturesSetup(t)
+				defer cleanup()
+			}
+
 			// When
-			src := filepath.Join(fixturesRootDir, test.fixtureSrc)
 			syncReport, err := syncer.Sync(dst, src)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Then
 			if test.expectedChanges != nil {
 				// Check that if there is no change expected, there should be no change in report
 				if len(test.expectedChanges) == 0 {
-					assert.Equal(t, syncReport.ChangeCount(), 0)
+					assert.Equal(t, 0, syncReport.ChangeCount())
 				}
 
 				for _, path := range test.expectedChanges {
@@ -162,8 +213,8 @@ func TestFsSyncer_Sync(t *testing.T) {
 				t.Run("with file "+path, func(t *testing.T) {
 					dstPath := strings.Replace(path, src, dst, 1)
 					dstStat, err := os.Lstat(dstPath)
-					assert.NoError(t, err)
 
+					require.NoError(t, err)
 					assert.Equal(t, srcInfo.IsDir(), dstStat.IsDir(), "must be a directory")
 					assert.Equal(t,
 						srcInfo.Mode(), dstStat.Mode(),
@@ -172,9 +223,9 @@ func TestFsSyncer_Sync(t *testing.T) {
 					// If source file is a symlink
 					if srcInfo.Mode()&os.ModeSymlink == os.ModeSymlink {
 						srcLink, err := os.Readlink(path)
-						assert.NoError(t, err)
+						require.NoError(t, err)
 						dstLink, err := os.Readlink(dstPath)
-						assert.NoError(t, err)
+						require.NoError(t, err)
 
 						// If link is mentioning src path, replace it with dst
 						expectedLink := srcLink
@@ -190,7 +241,7 @@ func TestFsSyncer_Sync(t *testing.T) {
 				})
 				return nil
 			})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			if test.additionalSpecs != nil {
 				test.additionalSpecs(t, src, dst)

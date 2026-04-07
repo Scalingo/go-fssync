@@ -2,6 +2,10 @@
 
 ## To Be Released
 
+## v1.0.4 2026-04-07
+
+* build: various dependencies updates
+
 ## v1.0.3 2025-09-04
 
 * build(go): use go 1.24

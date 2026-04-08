@@ -1,4 +1,4 @@
-# FS Sync Library v1.0.3
+# FS Sync Library v1.0.4
 
 `go-fssync` is a Go library which aims at syncing / copying one file tree to another in a clever way. A bit like the `rsync` tool:
 
@@ -66,7 +66,7 @@ Bump new version number in:
 Commit, tag and create a new release:
 
 ```sh
-version="1.0.3"
+version="1.0.4"
 
 git switch --create release/${version}
 git add CHANGELOG.md README.md

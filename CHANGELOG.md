@@ -2,6 +2,8 @@
 
 ## To Be Released
 
+* test: point the absolute symlink fixture to a nonexistent path instead of `/` so tools that follow symlinks, like gopls, no longer crawl the whole filesystem
+
 ## v1.0.4 2026-04-07
 
 * build: various dependencies updates
